@@ -32,45 +32,46 @@ namespace csc485b {
                 }
             }
 
-            __device__ void sortAscending()
-            {
-                //
-            }
-
-            __device__ void sortDescending()
-            {
-                //
-            }
-        
 
             /**
              * Your solution. Should match the CPU output.
              */
             __global__ void opposing_sort(element_t* data, std::size_t invert_at_pos, std::size_t num_elements)
             {
+
                 int const th_id = blockIdx.x * blockDim.x + threadIdx.x;
-                unsigned int index; 
 
                 if (th_id < num_elements)
                 {
                     for (unsigned int step = 2; step <= num_elements; step <<= 1)
                     {
+
                         for (unsigned int substep = step >> 1; substep > 0; substep >>= 1)
                         {
-                            index = substep ^ th_id;
+                            unsigned int index = substep ^ th_id;
                             if (index > th_id)
                             {
-                                if (((index & step) == 0 && data[th_id] > data[index]) || 
+                                if (((index & step) == 0 && data[th_id] > data[index]) ||
                                     (((index & step) != 0) && data[th_id] < data[index]))
                                 {
-                                    float temp = data[th_id];
+                                    element_t temp = data[th_id];
                                     data[th_id] = data[index];
                                     data[index] = temp;
                                 }
                             }
+                            __syncthreads(); // dont understand why we have to sync it here, trial and error
                         }
+                        // I thought syncing here would make more sense, dont know why its not the solution
                     }
+
+
                 }
+                // This sorts the array when threads >= num_elements.
+                // For larger arrays we have to sort the array by 1024 or any arbitrary power of 2 chunks.
+                // After sorting 2 chunks merge them.
+
+                // Sort the array like usual for the last 1/4th of the array just reverse the order. This could be done really quickly
+                // See: https://developer.nvidia.com/blog/using-shared-memory-cuda-cc/ for reversing.
             }
 
             /**
@@ -83,8 +84,8 @@ namespace csc485b {
                 // Kernel launch configurations. Feel free to change these.
                 // This is set to maximise the size of a thread block on a T4, but it hasn't
                 // been tuned. It's not known if this is optimal.
-                std::size_t const threads_per_block = 32; // 1024;
-                std::size_t const num_blocks = 1;// (n + threads_per_block - 1) / threads_per_block;
+                std::size_t const threads_per_block = 1024;
+                std::size_t const num_blocks = (n + threads_per_block - 1) / threads_per_block;
 
                 // Allocate arrays on the device/GPU
                 element_t* d_data;
