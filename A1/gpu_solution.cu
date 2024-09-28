@@ -39,36 +39,39 @@ namespace csc485b {
             __global__ void opposing_sort(element_t* data, std::size_t invert_at_pos, std::size_t num_elements)
             {
 
+                // Data is the global memory, don't forget.
+
                 int const th_id = blockIdx.x * blockDim.x + threadIdx.x;
+                unsigned int subarray_offset = blockIdx.x * blockDim.x;
+                unsigned int subarray_size = blockDim.x;
 
                 if (th_id < num_elements)
                 {
-                    for (unsigned int step = 2; step <= num_elements; step <<= 1)
-                    {
+                    //data[th_id] = threadIdx.x;
 
+                    
+                    for (unsigned int step = 2; step <= subarray_size; step <<= 1)
+                    {
                         for (unsigned int substep = step >> 1; substep > 0; substep >>= 1)
                         {
-                            unsigned int index = substep ^ th_id;
-                            if (index > th_id)
+                            unsigned int index = substep ^ threadIdx.x;
+                            if (index > threadIdx.x)
                             {
-                                if (((index & step) == 0 && data[th_id] > data[index]) ||
-                                    (((index & step) != 0) && data[th_id] < data[index]))
+                                if (((index & step) == 0 && data[th_id] > data[index + subarray_offset]) ||
+                                    (((index & step) != 0) && data[th_id] < data[index + subarray_offset]))
                                 {
                                     element_t temp = data[th_id];
-                                    data[th_id] = data[index];
-                                    data[index] = temp;
+                                    data[th_id] = data[index + subarray_offset];
+                                    data[index + subarray_offset] = temp;
                                 }
                             }
-                            __syncthreads(); // dont understand why we have to sync it here, trial and error
+                            __syncthreads();
                         }
-                        // I thought syncing here would make more sense, dont know why its not the solution
-                    }
-
+                    }          
 
                 }
-                // This sorts the array when threads >= num_elements.
-                // For larger arrays we have to sort the array by 1024 or any arbitrary power of 2 chunks.
-                // After sorting 2 chunks merge them.
+
+                // We need to sync across blocks now. 
 
                 // Sort the array like usual for the last 1/4th of the array just reverse the order. This could be done really quickly
                 // See: https://developer.nvidia.com/blog/using-shared-memory-cuda-cc/ for reversing.
@@ -84,7 +87,7 @@ namespace csc485b {
                 // Kernel launch configurations. Feel free to change these.
                 // This is set to maximise the size of a thread block on a T4, but it hasn't
                 // been tuned. It's not known if this is optimal.
-                std::size_t const threads_per_block = 1024;
+                std::size_t const threads_per_block = 4;
                 std::size_t const num_blocks = (n + threads_per_block - 1) / threads_per_block;
 
                 // Allocate arrays on the device/GPU

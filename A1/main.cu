@@ -9,7 +9,7 @@
 
 int main()
 {
-    std::size_t const n = 1024;
+    std::size_t const n = 32;
     std::size_t const switch_at = 3 * (n >> 2);
 
 
