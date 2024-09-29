@@ -32,7 +32,42 @@ namespace csc485b {
                 }
             }
 
+            __device__ void bitonic_sort(element_t* data, unsigned int subarray_offset, unsigned int subarray_size, unsigned int th_id, bool direction)
+            {
+                extern __shared__ element_t array_chunk[];
+                array_chunk[th_id] = data[th_id];
+                __syncthreads();
 
+                for (unsigned int step = 2; step <= subarray_size; step <<= 1)
+                {
+                    for (unsigned int substep = step >> 1; substep > 0; substep >>= 1)
+                    {
+                        unsigned int index = substep ^ threadIdx.x;
+                        if (index > threadIdx.x)
+                        { 
+                            if (((index & step) == 0 && array_chunk[th_id] > array_chunk[index + subarray_offset]) ||
+                                ((index & step) != 0 && array_chunk[th_id] < array_chunk[index + subarray_offset])) //Sort the subarray
+                            {
+                                element_t temp = array_chunk[th_id];
+                                array_chunk[th_id] = array_chunk[index + subarray_offset];
+                                array_chunk[index + subarray_offset] = temp;
+                            }
+
+                            if (((index & step) != 0 && array_chunk[th_id] > array_chunk[index + subarray_offset]) ||
+                                ((index & step) == 0 && array_chunk[th_id] < array_chunk[index + subarray_offset]) && direction) //Sort the subarray
+                            {
+                                element_t temp = array_chunk[th_id];
+                                array_chunk[th_id] = array_chunk[index + subarray_offset];
+                                array_chunk[index + subarray_offset] = temp;
+                            }
+                        }
+                        __syncthreads();
+                    }
+                }
+
+                data[th_id] = array_chunk[th_id];
+
+            }
             /**
              * Your solution. Should match the CPU output.
              */
@@ -42,35 +77,14 @@ namespace csc485b {
                 // Data is the global memory, don't forget.
 
                 int const th_id = blockIdx.x * blockDim.x + threadIdx.x;
-                unsigned int subarray_offset = blockIdx.x * blockDim.x;
-                unsigned int subarray_size = blockDim.x;
+                unsigned int chunk_offset = blockIdx.x * blockDim.x;
+                unsigned int chunk_size = blockDim.x;
+                unsigned int num_chunks = num_elements / chunk_size;
 
                 if (th_id < num_elements)
                 {
-                    //data[th_id] = threadIdx.x;
-
-                    
-                    for (unsigned int step = 2; step <= subarray_size; step <<= 1)
-                    {
-                        for (unsigned int substep = step >> 1; substep > 0; substep >>= 1)
-                        {
-                            unsigned int index = substep ^ threadIdx.x;
-                            if (index > threadIdx.x)
-                            {
-                                if (((index & step) == 0 && data[th_id] > data[index + subarray_offset]) ||
-                                    (((index & step) != 0) && data[th_id] < data[index + subarray_offset]))
-                                {
-                                    element_t temp = data[th_id];
-                                    data[th_id] = data[index + subarray_offset];
-                                    data[index + subarray_offset] = temp;
-                                }
-                            }
-                            __syncthreads();
-                        }
-                    }          
-
+                    bitonic_sort(data, chunk_offset, chunk_size, th_id, blockIdx.x % 2);
                 }
-
                 // We need to sync across blocks now. 
 
                 // Sort the array like usual for the last 1/4th of the array just reverse the order. This could be done really quickly
