@@ -53,8 +53,8 @@ namespace csc485b {
                                 array_chunk[index + subarray_offset] = temp;
                             }
 
-                            if (((index & step) != 0 && array_chunk[th_id] > array_chunk[index + subarray_offset]) ||
-                                ((index & step) == 0 && array_chunk[th_id] < array_chunk[index + subarray_offset]) && direction) //Sort the subarray
+                            if ((((index & step) != 0 && array_chunk[th_id] > array_chunk[index + subarray_offset]) ||
+                                ((index & step) == 0 && array_chunk[th_id] < array_chunk[index + subarray_offset])) && direction) //Sort the subarray
                             {
                                 element_t temp = array_chunk[th_id];
                                 array_chunk[th_id] = array_chunk[index + subarray_offset];
