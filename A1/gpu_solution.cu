@@ -35,7 +35,7 @@ namespace csc485b {
             __device__ void bitonic_sort(element_t* data, unsigned int subarray_offset, unsigned int subarray_size, unsigned int th_id, bool direction)
             {
                 extern __shared__ element_t array_chunk[];
-                array_chunk[th_id] = data[th_id];
+                array_chunk[threadIdx.x] = data[th_id];
                 __syncthreads();
 
                 for (unsigned int step = 2; step <= subarray_size; step <<= 1)
@@ -45,27 +45,27 @@ namespace csc485b {
                         unsigned int index = substep ^ threadIdx.x;
                         if (index > threadIdx.x)
                         { 
-                            if (((index & step) == 0 && array_chunk[th_id] > array_chunk[index + subarray_offset]) ||
-                                ((index & step) != 0 && array_chunk[th_id] < array_chunk[index + subarray_offset])) //Sort the subarray
+                            if (((index & step) == 0 && array_chunk[threadIdx.x] > array_chunk[index]) ||
+                                ((index & step) != 0 && array_chunk[threadIdx.x] < array_chunk[index])) //Sort the subarray
                             {
-                                element_t temp = array_chunk[th_id];
-                                array_chunk[th_id] = array_chunk[index + subarray_offset];
-                                array_chunk[index + subarray_offset] = temp;
+                                element_t temp = array_chunk[threadIdx.x];
+                                array_chunk[threadIdx.x] = array_chunk[index];
+                                array_chunk[index] = temp;
                             }
 
-                            if ((((index & step) != 0 && array_chunk[th_id] > array_chunk[index + subarray_offset]) ||
-                                ((index & step) == 0 && array_chunk[th_id] < array_chunk[index + subarray_offset])) && direction) //Sort the subarray
+                            if ((((index & step) != 0 && array_chunk[threadIdx.x] > array_chunk[index]) ||
+                                ((index & step) == 0 && array_chunk[threadIdx.x] < array_chunk[index])) && direction) //Sort the subarray
                             {
-                                element_t temp = array_chunk[th_id];
-                                array_chunk[th_id] = array_chunk[index + subarray_offset];
-                                array_chunk[index + subarray_offset] = temp;
+                                element_t temp = array_chunk[threadIdx.x];
+                                array_chunk[threadIdx.x] = array_chunk[index];
+                                array_chunk[index] = temp;
                             }
                         }
                         __syncthreads();
                     }
                 }
 
-                data[th_id] = array_chunk[th_id];
+                data[th_id] = array_chunk[threadIdx.x];
 
             }
             /**
@@ -118,7 +118,7 @@ namespace csc485b {
 
                 // Time the execution of the kernel that you implemented
                 auto const kernel_start = std::chrono::high_resolution_clock::now();
-                opposing_sort << < num_blocks, threads_per_block >> > (d_data, switch_at, n);
+                opposing_sort << < num_blocks, threads_per_block, threads_per_block >> > (d_data, switch_at, n);
                 auto const kernel_end = std::chrono::high_resolution_clock::now();
                 CHECK_ERROR("Executing kernel on device");
 
