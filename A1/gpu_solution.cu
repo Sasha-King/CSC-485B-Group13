@@ -82,7 +82,7 @@ namespace csc485b {
                 int r_id = n - 1 - th_id;
                 int offset = invert_at_pos + th_id;
 
-                if (th_id < (n / 8)) {
+                if (th_id < (n/8)) {
                 
                     element_t temp = data[offset];
                     data[offset] = data[r_id];
@@ -157,7 +157,7 @@ namespace csc485b {
                 //Sort and merge blocks
                 opposing_sort << < num_blocks, threads_per_block >> > (d_data, switch_at, n);
 
-                for (unsigned int step = threads_per_block; step <= threads_per_block * num_blocks && num_blocks != 1; step <<= 1)
+                for (unsigned int step = threads_per_block << 1; step <= threads_per_block * num_blocks; step <<= 1)
                 {
                     for (unsigned int substep = step >> 1; substep > 0; substep >>= 1)
                     {
