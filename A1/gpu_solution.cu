@@ -46,8 +46,11 @@ namespace csc485b {
                     for (unsigned int substep = step >> 1; substep > 0; substep >>= 1)
                     {
                         unsigned int index = substep ^ threadIdx.x;
+                        
                         if (index > threadIdx.x)
                         { 
+
+
                             if (((index & step) == 0 && array_chunk[threadIdx.x] > array_chunk[index]) ||
                                 ((index & step) != 0 && array_chunk[threadIdx.x] < array_chunk[index])) //Sort the subarray
                             {
@@ -67,22 +70,23 @@ namespace csc485b {
                         __syncthreads();
                     }
                 }
+                
                 data[th_id] = array_chunk[threadIdx.x];
 
             }
 
             /*
             Reverses last quarter of the array
-            Based of of: https://developer.nvidia.com/blog/using-shared-memory-cuda-cc/ 
-            shared memory was casuing issues so just didnt use it (still alot faster then CPU)
+            Based of of: https://developer.nvidia.com/blog/using-shared-memory-cuda-cc/ though without using shared memory
             */
             __global__ void reverse_at(element_t* data, std::size_t invert_at_pos, std::size_t n)
             {
                 int const th_id = blockIdx.x * blockDim.x + threadIdx.x;
-                int r_id = n - 1 - th_id;
+                int r_id = n - 1 - th_id; 
                 int offset = invert_at_pos + th_id;
+                int n_reverse = n - invert_at_pos; //number of elements that need to be swapped 
 
-                if (th_id < (n/8)) {
+                if (th_id < (n_reverse/2)) {
                 
                     element_t temp = data[offset];
                     data[offset] = data[r_id];

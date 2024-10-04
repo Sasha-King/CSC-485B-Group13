@@ -26,6 +26,7 @@ int main()
     std::cout << "" << std::endl;
     */
     
+    
     csc485b::a1::gpu::run_gpu_soln(data, switch_at, n);
 
     return EXIT_SUCCESS;
