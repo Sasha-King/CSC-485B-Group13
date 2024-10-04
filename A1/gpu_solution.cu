@@ -32,6 +32,9 @@ namespace csc485b {
                 }
             }
 
+            /*
+            * Implementation based of https://en.wikipedia.org/wiki/Bitonic_sorter
+            */
             __device__ void bitonic_sort(element_t* data, unsigned int subarray_offset, unsigned int subarray_size, unsigned int th_id, bool direction)
             {
                 __shared__ element_t array_chunk[1024];
@@ -39,7 +42,6 @@ namespace csc485b {
                 __syncthreads();
 
                 
-
                 for (unsigned int step = 2; step <= subarray_size; step <<= 1)
                 {
                     for (unsigned int substep = step >> 1; substep > 0; substep >>= 1)
@@ -70,6 +72,10 @@ namespace csc485b {
 
             }
 
+            /*
+            Based of of: https://developer.nvidia.com/blog/using-shared-memory-cuda-cc/ for reversing.
+            Reverses one block
+            */
             __device__ void reverse_at(element_t* data, unsigned int th_id, std::size_t invert_at_pos, std::size_t n)
             {
                 __shared__ element_t smem[1024];
@@ -85,8 +91,8 @@ namespace csc485b {
             }
 
             /**
-             * Your solution. Should match the CPU output.
-             */
+            * Your solution. Should match the CPU output.
+            */
             __global__ void opposing_sort(element_t* data, std::size_t invert_at_pos, std::size_t num_elements)
             {
 
@@ -117,7 +123,17 @@ namespace csc485b {
                         data[index] = temp;
                     }
                 }
+<<<<<<< HEAD
             }
+=======
+                // We need to sync across blocks now. 
+
+                // Sort the array like usual for the last 1/4th of the array just reverse the order. This could be done really quickly
+               
+            }
+
+           
+>>>>>>> 26412294816b3c5eca8fe09e6b002d8c50e519d3
             /**
              * Performs all the logic of allocating device vectors and copying host/input
              * vectors to the device. Times the opposing_sort() kernel with wall time,
