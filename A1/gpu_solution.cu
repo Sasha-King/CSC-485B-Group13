@@ -18,8 +18,7 @@ namespace csc485b {
              * the CPU. Run the data through the GPU once with some arbitrary logic to
              * ensure that the GPU cache is warm too and the comparison is more fair.
              */
-            __global__
-                void warm_the_gpu(element_t* data, std::size_t invert_at_pos, std::size_t num_elements)
+            __global__ void warm_the_gpu(element_t* data, std::size_t invert_at_pos, std::size_t num_elements)
             {
                 int const th_id = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -73,19 +72,21 @@ namespace csc485b {
             }
 
             /*
-            Based of of: https://developer.nvidia.com/blog/using-shared-memory-cuda-cc/ for reversing.
+            Reverses last quarter of the array
+            Based of of: https://developer.nvidia.com/blog/using-shared-memory-cuda-cc/ 
+            shared memory was casuing issues so just didnt use it (still alot faster then CPU)
             */
-            __device__ void reverse_at(element_t* data, unsigned int th_id, std::size_t invert_at_pos, std::size_t n)
+            __global__ void reverse_at(element_t* data, std::size_t invert_at_pos, std::size_t n)
             {
-                __shared__ element_t smem[1024];
-                int t = threadIdx.x;
-                int tr = n - 1 - (th_id - invert_at_pos);
-                smem[t] = data[th_id];
-                __syncthreads();
+                int const th_id = blockIdx.x * blockDim.x + threadIdx.x;
+                int r_id = n - 1 - th_id;
+                int offset = invert_at_pos + th_id;
 
-                if (th_id >= invert_at_pos)
-                {
-                    data[th_id] = smem[tr];
+                if (th_id < (n / 8)) {
+                
+                    element_t temp = data[offset];
+                    data[offset] = data[r_id];
+                    data[r_id] = temp;
                 }
             }
 
@@ -108,6 +109,7 @@ namespace csc485b {
                     bitonic_sort(data, chunk_offset, chunk_size, th_id, blockIdx.x % 2);
                 }
             }
+
             __global__ void merge(element_t* data, int substep, int step, int n)
             {
                 unsigned int th_id = threadIdx.x + blockDim.x * blockIdx.x;
@@ -151,6 +153,8 @@ namespace csc485b {
 
                 // Time the execution of the kernel that you implemented
                 auto const kernel_start = std::chrono::high_resolution_clock::now();
+                
+                //Sort and merge blocks
                 opposing_sort << < num_blocks, threads_per_block >> > (d_data, switch_at, n);
 
                 for (unsigned int step = threads_per_block; step <= threads_per_block * num_blocks && num_blocks != 1; step <<= 1)
@@ -161,7 +165,8 @@ namespace csc485b {
                     }
                 }
 
-                //TODO: reverse last 1/4 
+                //Reverse last quarter of list
+                reverse_at << <num_blocks, threads_per_block >> > (d_data, switch_at, n);
 
                 auto const kernel_end = std::chrono::high_resolution_clock::now();
                 CHECK_ERROR("Executing kernel on device");
