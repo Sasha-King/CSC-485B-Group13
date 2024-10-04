@@ -100,17 +100,24 @@ namespace csc485b {
                 chunk_size = chunk_size < num_elements ? chunk_size : num_elements;
                 if (th_id < num_elements)
                 {
-                    bitonic_sort(data, chunk_offset, chunk_size, th_id, 0);
-                    __syncthreads();
-
-                    reverse_at(data, th_id, invert_at_pos, num_elements);
+                    bitonic_sort(data, chunk_offset, chunk_size, th_id, blockIdx.x % 2);
                 }
-                // We need to sync across blocks now. 
-
-                // Sort the array like usual for the last 1/4th of the array just reverse the order. This could be done really quickly
-                // See: https://developer.nvidia.com/blog/using-shared-memory-cuda-cc/ for reversing.
             }
-
+            __global__ void merge(element_t* data, int substep, int step, int n)
+            {
+                unsigned int th_id = threadIdx.x + blockDim.x * blockIdx.x;
+                unsigned int index = substep ^ th_id;
+                if (index > th_id && th_id < n)
+                {
+                    if (((index & step) == 0 && data[th_id] > data[index]) ||
+                        ((index & step) != 0 && data[th_id] < data[index]))
+                    {
+                        element_t temp = data[th_id];
+                        data[th_id] = data[index];
+                        data[index] = temp;
+                    }
+                }
+            }
             /**
              * Performs all the logic of allocating device vectors and copying host/input
              * vectors to the device. Times the opposing_sort() kernel with wall time,
@@ -122,7 +129,7 @@ namespace csc485b {
                 // This is set to maximise the size of a thread block on a T4, but it hasn't
                 // been tuned. It's not known if this is optimal.
                 std::size_t const threads_per_block = 1024;
-                std::size_t const num_blocks = 1;//(n + threads_per_block - 1) / threads_per_block;
+                std::size_t const num_blocks = (n + threads_per_block - 1) / threads_per_block;
 
                 // Allocate arrays on the device/GPU
                 element_t* d_data;
@@ -139,6 +146,14 @@ namespace csc485b {
                 // Time the execution of the kernel that you implemented
                 auto const kernel_start = std::chrono::high_resolution_clock::now();
                 opposing_sort << < num_blocks, threads_per_block >> > (d_data, switch_at, n);
+
+                for (unsigned int step = threads_per_block; step <= threads_per_block * num_blocks && num_blocks != 1; step <<= 1)
+                {
+                    for (unsigned int substep = step >> 1; substep > 0; substep >>= 1)
+                    {
+                        merge << <num_blocks, threads_per_block >> > (d_data, substep, step, n);
+                    }
+                }
                 auto const kernel_end = std::chrono::high_resolution_clock::now();
                 CHECK_ERROR("Executing kernel on device");
 
