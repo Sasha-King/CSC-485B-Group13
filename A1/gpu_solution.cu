@@ -74,7 +74,6 @@ namespace csc485b {
 
             /*
             Based of of: https://developer.nvidia.com/blog/using-shared-memory-cuda-cc/ for reversing.
-            Reverses one block
             */
             __device__ void reverse_at(element_t* data, unsigned int th_id, std::size_t invert_at_pos, std::size_t n)
             {
@@ -123,17 +122,8 @@ namespace csc485b {
                         data[index] = temp;
                     }
                 }
-<<<<<<< HEAD
-            }
-=======
-                // We need to sync across blocks now. 
-
-                // Sort the array like usual for the last 1/4th of the array just reverse the order. This could be done really quickly
-               
             }
 
-           
->>>>>>> 26412294816b3c5eca8fe09e6b002d8c50e519d3
             /**
              * Performs all the logic of allocating device vectors and copying host/input
              * vectors to the device. Times the opposing_sort() kernel with wall time,
@@ -170,6 +160,9 @@ namespace csc485b {
                         merge << <num_blocks, threads_per_block >> > (d_data, substep, step, n);
                     }
                 }
+
+                //TODO: reverse last 1/4 
+
                 auto const kernel_end = std::chrono::high_resolution_clock::now();
                 CHECK_ERROR("Executing kernel on device");
 
