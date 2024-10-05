@@ -38,9 +38,9 @@ namespace csc485b {
 
                 std::cout << "CPU Baseline time: "
                     << std::chrono::duration_cast<std::chrono::nanoseconds>(cpu_end - cpu_start).count()
-                    << " ns" << " ";
+                    << " ns" << std::endl;
 
-                //for (auto const x : data) std::cout << x << " "; std::cout << std::endl;
+                for (auto const x : data) std::cout << x << " "; std::cout << std::endl;
             }
 
         } // namespace cpu

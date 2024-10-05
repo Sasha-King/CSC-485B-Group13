@@ -32,8 +32,7 @@ namespace csc485b {
             }
 
             /*
-            * Implementation based of https://en.wikipedia.org/wiki/Bitonic_sorter, accessed Sept 24, 2024
-            * Shared memory information from https://developer.nvidia.com/blog/using-shared-memory-cuda-cc/, accessed Sept 26, 2024
+            * Implementation based of https://en.wikipedia.org/wiki/Bitonic_sorter
             */
             __device__ void bitonic_sort(element_t* data, unsigned int subarray_offset, unsigned int subarray_size, unsigned int th_id, bool direction)
             {
@@ -41,15 +40,15 @@ namespace csc485b {
                 array_chunk[threadIdx.x] = data[th_id];
                 __syncthreads();
 
-                
+
                 for (unsigned int step = 2; step <= subarray_size; step <<= 1)
                 {
                     for (unsigned int substep = step >> 1; substep > 0; substep >>= 1)
                     {
                         unsigned int index = substep ^ threadIdx.x;
-                        
+
                         if (index > threadIdx.x)
-                        { 
+                        {
 
 
                             if (((index & step) == 0 && array_chunk[threadIdx.x] > array_chunk[index]) ||
@@ -71,24 +70,24 @@ namespace csc485b {
                         __syncthreads();
                     }
                 }
-                
+
                 data[th_id] = array_chunk[threadIdx.x];
 
             }
 
             /*
             Reverses last quarter of the array
-            Based of of: https://developer.nvidia.com/blog/using-shared-memory-cuda-cc/ accessed Sept 26, 2024
+            Based of of: https://developer.nvidia.com/blog/using-shared-memory-cuda-cc/ though without using shared memory
             */
             __global__ void reverse_at(element_t* data, std::size_t invert_at_pos, std::size_t n)
             {
                 int const th_id = blockIdx.x * blockDim.x + threadIdx.x;
-                int r_id = n - 1 - th_id; 
+                int r_id = n - 1 - th_id;
                 int offset = invert_at_pos + th_id;
                 int n_reverse = n - invert_at_pos; //number of elements that need to be swapped 
 
-                if (th_id < (n_reverse/2)) {
-                
+                if (th_id < (n_reverse / 2)) {
+
                     element_t temp = data[offset];
                     data[offset] = data[r_id];
                     data[r_id] = temp;
@@ -158,11 +157,11 @@ namespace csc485b {
 
                 // Time the execution of the kernel that you implemented
                 auto const kernel_start = std::chrono::high_resolution_clock::now();
-                
+
                 //Sort and merge blocks
                 opposing_sort << < num_blocks, threads_per_block >> > (d_data, switch_at, n);
 
-                for (unsigned int step = threads_per_block << 1; step <= threads_per_block * num_blocks; step <<= 1)
+                for (unsigned int step = threads_per_block << 1; step <= n; step <<= 1)
                 {
                     for (unsigned int substep = step >> 1; substep > 0; substep >>= 1)
                     {
@@ -187,7 +186,7 @@ namespace csc485b {
                     << std::chrono::duration_cast<std::chrono::nanoseconds>(kernel_end - kernel_start).count()
                     << " ns" << std::endl;
 
-                //for (auto const x : data) std::cout << x << " "; std::cout << std::endl;
+                for (auto const x : data) std::cout << x << " "; std::cout << std::endl;
             }
 
         } // namespace gpu
