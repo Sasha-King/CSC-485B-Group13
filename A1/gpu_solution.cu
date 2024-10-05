@@ -32,7 +32,8 @@ namespace csc485b {
             }
 
             /*
-            * Implementation based of https://en.wikipedia.org/wiki/Bitonic_sorter
+            * Implementation based of https://en.wikipedia.org/wiki/Bitonic_sorter, accessed Sept 24, 2024
+            * Shared memory information from https://developer.nvidia.com/blog/using-shared-memory-cuda-cc/, accessed Sept 26, 2024
             */
             __device__ void bitonic_sort(element_t* data, unsigned int subarray_offset, unsigned int subarray_size, unsigned int th_id, bool direction)
             {
@@ -77,7 +78,7 @@ namespace csc485b {
 
             /*
             Reverses last quarter of the array
-            Based of of: https://developer.nvidia.com/blog/using-shared-memory-cuda-cc/ though without using shared memory
+            Based of of: https://developer.nvidia.com/blog/using-shared-memory-cuda-cc/ accessed Sept 26, 2024
             */
             __global__ void reverse_at(element_t* data, std::size_t invert_at_pos, std::size_t n)
             {
