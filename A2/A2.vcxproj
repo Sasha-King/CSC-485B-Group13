@@ -79,6 +79,13 @@
   <ItemGroup>
     <CudaCompile Include="main.cu" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="cuda_common.h" />
+    <ClInclude Include="data_generator.h" />
+    <ClInclude Include="data_types.h" />
+    <ClInclude Include="dense_graph.h" />
+    <ClInclude Include="sparse_graph.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 12.6.targets" />
