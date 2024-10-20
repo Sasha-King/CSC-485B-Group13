@@ -40,18 +40,13 @@ void build_graph( DenseGraph g, edge_t const * edge_list, std::size_t m )
 
     unsigned int th_id = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned int n = g.n;
-    unsigned int threadsPerBlock = blockDim.x;
 
-    if (th_id < m)
-    {
-        // edge_list = [vec2(0, 1), vec2(1, 0)]
-        // g.adjacencyMatrix[th_id] = edge_list[th_id].x;
-        
-        // g.adjacencyMatrix = edge_list[th_id].x
-        unsigned int x = edge_list[th_id].x;
-        unsigned int y = edge_list[th_id].y;
+    for (unsigned int i = th_id; i < m; i += gridDim.x * blockDim.x) {
+        unsigned int x = edge_list[i].x;
+        unsigned int y = edge_list[i].y;
 
         g.adjacencyMatrix[x * n + y] = 1;
+        g.adjacencyMatrix[y * n + x] = 1;
     }
     return;
 }

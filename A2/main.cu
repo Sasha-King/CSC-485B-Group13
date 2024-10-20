@@ -26,8 +26,9 @@ void run(DeviceGraph g, csc485b::a2::edge_t const* d_edges, std::size_t m)
     auto const build_start = std::chrono::high_resolution_clock::now();
 
     // this code doesn't work yet!
-    csc485b::a2::gpu::build_graph << < 1, 32 >> > (g, d_edges, m);
+    csc485b::a2::gpu::build_graph << < 4, 256 >> > (g, d_edges, m);
 
+    
     cudaDeviceSynchronize();
     auto const reachability_start = std::chrono::high_resolution_clock::now();
 
@@ -46,12 +47,27 @@ void run(DeviceGraph g, csc485b::a2::edge_t const* d_edges, std::size_t m)
         << std::chrono::duration_cast<std::chrono::microseconds>(end - reachability_start).count()
         << " us"
         << std::endl;
+
+}
+
+std::vector<csc485b::a2::node_t> cpu_adjacency_matrix_dense(size_t n, csc485b::a2::edge_list_t edge_list, std::size_t m)
+{
+    std::vector<csc485b::a2::node_t> matrix(n * n);
+    for (int i = 0; i < m; ++i)
+    {
+        unsigned int x = edge_list[i].x;
+        unsigned int y = edge_list[i].y;
+
+        matrix[x * n + y] = 1;
+        matrix[y * n + x] = 1;
+    }
+    return matrix;
 }
 
 /**
  * Allocates space for a dense graph and then runs the test code on it.
  */
-void run_dense(csc485b::a2::edge_t const* d_edges, std::size_t n, std::size_t m)
+void run_dense(csc485b::a2::edge_t const* d_edges, std::size_t n, std::size_t m, csc485b::a2::edge_list_t graph)
 {
     using namespace csc485b;
 
@@ -62,12 +78,30 @@ void run_dense(csc485b::a2::edge_t const* d_edges, std::size_t n, std::size_t m)
 
     run(d_dg, d_edges, m);
 
+
+    
     // check output?
     std::vector< a2::node_t > host_matrix(d_dg.matrix_size());
     a2::DenseGraph dg{ n, host_matrix.data() };
     cudaMemcpy(dg.adjacencyMatrix, d_dg.adjacencyMatrix, sizeof(a2::node_t) * d_dg.matrix_size(), cudaMemcpyDeviceToHost);
     std::copy(host_matrix.cbegin(), host_matrix.cend(), std::ostream_iterator< a2::node_t >(std::cout, " "));
 
+
+
+    std::vector<csc485b::a2::node_t> expected_matrix = cpu_adjacency_matrix_dense(n, graph, m);
+    std::cout << std::endl;
+    //std::cout << "expected:" << std::endl;
+    bool failed = false;
+    for (int i = 0; i < n * n; ++i)
+    {
+        if (expected_matrix[i] != dg.adjacencyMatrix[i])
+        {
+            failed = true;
+            break;
+        }
+    }
+
+    if (failed) std::cout << "test failed" << std::endl;
     // clean up
     cudaFree(d_matrix);
 }
@@ -97,17 +131,17 @@ int main()
     using namespace csc485b;
 
     // Create input
-    std::size_t constexpr n = 4;
+    std::size_t constexpr n = 1024;
     std::size_t constexpr expected_degree = n >> 1;
 
     a2::edge_list_t const graph = a2::generate_graph(n, n * expected_degree);
     std::size_t const m = graph.size();
 
     // lazily echo out input graph
-    for (auto const& e : graph)
-    {
-        std::cout << "(" << e.x << "," << e.y << ") ";
-    }
+    //for (auto const& e : graph)
+    //{
+    //    std::cout << "(" << e.x << "," << e.y << ") ";
+    //}
 
     // allocate and memcpy input to device
     a2::edge_t* d_edges;
@@ -115,7 +149,10 @@ int main()
     cudaMemcpyAsync(d_edges, graph.data(), sizeof(a2::edge_t) * m, cudaMemcpyHostToDevice);
 
     // run your code!
-    run_dense(d_edges, n, m);
+    run_dense(d_edges, n, m, graph);
+
+    
+
     run_sparse(d_edges, n, m);
 
     return EXIT_SUCCESS;
