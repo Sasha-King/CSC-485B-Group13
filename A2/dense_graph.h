@@ -24,9 +24,7 @@ struct DenseGraph
   std::size_t matrix_size() const { return n * n; }
 };
 
-
 namespace gpu {
-
 
 /**
  * Constructs a DenseGraph from an input edge list of m edges.
@@ -36,8 +34,6 @@ namespace gpu {
 __global__
 void build_graph( DenseGraph g, edge_t const * edge_list, std::size_t m )
 {
-    // IMPLEMENT ME!
-
     unsigned int th_id = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned int n = g.n;
 
