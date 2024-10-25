@@ -109,9 +109,9 @@ void run_dense(csc485b::a2::edge_t const* d_edges, std::size_t n, std::size_t m,
 
 /*
 * Constructs a SparseGraph from an input list of edges.
-* In slight variation of CSR format https://www.usenix.org/system/files/login/articles/login_winter20_16_kelly.pdf 
-* uses index 0 and does not store tott in neighbours_start_at[V+1]
-* Also the way the edges are formated there is a (1,0) and a (0,1) edge
+* In slight variation of CSR format found at
+* https://www.usenix.org/system/files/login/articles/login_winter20_16_kelly.pdf 
+* uses index 0 and does not store total edge count in neighbours_start_at[V+1]
 */
 csc485b::a2::SparseGraph cpu_CSR(std::size_t n, std::size_t m, csc485b::a2::edge_list_t graph) {
     
@@ -127,7 +127,7 @@ csc485b::a2::SparseGraph cpu_CSR(std::size_t n, std::size_t m, csc485b::a2::edge
         offsets[x]++;   
     }
 
-    //Updates offsetts to contain cumulative out degree
+    //Updates offsetts to contain cumulative out degree (prefix sum)
     int t = 0;
     int a;
     for (a = 0; a < n; a++) {
@@ -136,6 +136,7 @@ csc485b::a2::SparseGraph cpu_CSR(std::size_t n, std::size_t m, csc485b::a2::edge
         offsets[a] = t; 
     }
 
+    //Settting neighbours and final offsett values
     for (std::size_t i = 0; i < m; i++) {
 
         a2::node_t x = graph[i].x;

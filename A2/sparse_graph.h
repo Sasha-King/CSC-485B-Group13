@@ -55,7 +55,7 @@ void build_graph( SparseGraph g, edge_t const * edge_list, std::size_t m )
     }
     __syncthreads();
 
-    //something is going wrong here 
+    //Settting neighbours and final offsett values
     for (unsigned int i = th_id; i < g.m; i += gridDim.x * blockDim.x) {
         
         node_t x = edge_list[i].x;
