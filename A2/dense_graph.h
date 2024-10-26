@@ -48,12 +48,7 @@ void build_graph(DenseGraph g, edge_t const* edge_list, std::size_t m)
     return;
 }
 
-/**
-  * Repopulates the adjacency matrix as a new graph that represents
-  * the two-hop neighbourhood of input graph g
-  */
-__global__
-void two_hop_reachability( DenseGraph g, DenseGraph output)
+__device__ void squareMatrix(const node_t* input, node_t* output, size_t N)
 {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
@@ -61,36 +56,50 @@ void two_hop_reachability( DenseGraph g, DenseGraph output)
     __shared__ node_t a[1024];
     __shared__ node_t b[1024];
 
-    size_t n = g.n;
     int tileSize = blockDim.x;
 
     //Matrix multitply
-    if (row < n && col < n)
+    if (row < N && col < N)
     {
         int sum = 0;
 
-        for (int tileOffset = 0; tileOffset < (tileSize + n - 1) / tileSize; ++tileOffset) {
-            a[threadIdx.y * tileSize + threadIdx.x] = g.adjacencyMatrix[row * n + (tileOffset * tileSize + threadIdx.x)];
-            b[threadIdx.y * tileSize + threadIdx.x] = g.adjacencyMatrix[(tileOffset * tileSize + threadIdx.y) * n + col];
+        for (int tileOffset = 0; tileOffset < (tileSize + N - 1) / tileSize; ++tileOffset) {
+            a[threadIdx.y * tileSize + threadIdx.x] = input[row * N + (tileOffset * tileSize + threadIdx.x)];
+            b[threadIdx.y * tileSize + threadIdx.x] = input[(tileOffset * tileSize + threadIdx.y) * N + col];
 
             __syncthreads();
 
-            
             for (int i = 0; i < tileSize; i++)
             {
                 sum += a[threadIdx.y * tileSize + i] * b[i * tileSize + threadIdx.x];
             }
             __syncthreads();
         }
-        output.adjacencyMatrix[row * n + col] = sum;
+        output[row * N + col] = fminf(fmaxf(sum, 0), 1); // clamp between 0, 1
     }
+}
 
+__device__ void removeSelfLoops(node_t* matrix, const size_t& N)
+{
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
 
-    //Set diagonals 
+    if (row < N && col < N)
+    {
+        if (row == col) matrix[row * N + col] = 0;
+    }
+    return;
+}
 
-     //Clamp values
-
-
+/**
+  * Repopulates the adjacency matrix as a new graph that represents
+  * the two-hop neighbourhood of input graph g
+  */
+__global__
+void two_hop_reachability( DenseGraph g, DenseGraph output)
+{
+    squareMatrix(g.adjacencyMatrix, output.adjacencyMatrix, g.n);
+    removeSelfLoops(output.adjacencyMatrix, g.n);
     return;
 }
 

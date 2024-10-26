@@ -22,17 +22,25 @@ void testMatMul(const csc485b::a2::DenseGraph& g, const csc485b::a2::DenseGraph&
         for (int col = 0; col < g.n; col++)
         {
             csc485b::a2::node_t sum = 0;
-            for (int k = 0; k < g.n; k++)
-            {
-                sum += g.adjacencyMatrix[row * g.n + k] * g.adjacencyMatrix[k * g.n + col];
-            }
 
-            //std::cout << "expected: " << sum << " recieved: " << output.adjacencyMatrix[row * g.n + col] << std::endl;
-            //std::cout << "rip" << std::endl; 
-            assert(output.adjacencyMatrix[row * g.n + col] == sum);
+            if (row == col)
+            {
+                // Set diagonal elements to 0
+                assert(output.adjacencyMatrix[row * g.n + col] == 0);
+            }
+            else
+            {
+                for (int k = 0; k < g.n; k++)
+                {
+                    sum += g.adjacencyMatrix[row * g.n + k] * g.adjacencyMatrix[k * g.n + col];
+                }
+
+                //Ensure the result is clamped to 0 or 1
+                assert(output.adjacencyMatrix[row * g.n + col] == fminf(fmaxf(sum, 0), 1));
+            }
         }
     }
-    std::cout << "Squraed matrix is correct" << std::endl;
+    std::cout << "Squared matrix is correct" << std::endl;
 }
 
 
@@ -315,7 +323,7 @@ int main()
 
     // Create input
     // CPU Testing makes it longer
-    std::size_t constexpr n = 4096;
+    std::size_t constexpr n = 1 << 12;
     std::size_t constexpr expected_degree = n >> 1;
 
     a2::edge_list_t const graph = a2::generate_graph(n, n * expected_degree);
@@ -330,8 +338,8 @@ int main()
     cudaMemcpyAsync(d_edges, graph.data(), sizeof(a2::edge_t) * m, cudaMemcpyHostToDevice);
 
     // run your code!
-    //run_dense(d_edges, n, m, graph);
-    run_sparse(d_edges, n, m, graph);
+    run_dense(d_edges, n, m, graph);
+    //run_sparse(d_edges, n, m, graph);
 
     return EXIT_SUCCESS;
 }
