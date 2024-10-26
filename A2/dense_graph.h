@@ -24,9 +24,7 @@ struct DenseGraph
   std::size_t matrix_size() const { return n * n; }
 };
 
-
 namespace gpu {
-
 
 /**
  * Constructs a DenseGraph from an input edge list of m edges.
@@ -36,7 +34,6 @@ namespace gpu {
 __global__
 void build_graph(DenseGraph g, edge_t const* edge_list, std::size_t m)
 {
-
     unsigned int th_id = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned int n = g.n;
 
@@ -50,25 +47,6 @@ void build_graph(DenseGraph g, edge_t const* edge_list, std::size_t m)
 
     return;
 }
-
-
-__device__ void matMul(DenseGraph g, DenseGraph output)
-{
-    int row = blockIdx.y * blockDim.y + threadIdx.y;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-    size_t n = g.n;
-    if (row < n && col < g.n)
-    {
-        int sum = 0;
-        for (int i = 0; i < n; ++i)
-        {
-            sum += g.adjacencyMatrix[row * n + col + i] * g.adjacencyMatrix[(row + i) * n + col];
-        }
-        output.adjacencyMatrix[row * n + col] = sum;
-    }
-    return;
-}
-
 
 /**
   * Repopulates the adjacency matrix as a new graph that represents

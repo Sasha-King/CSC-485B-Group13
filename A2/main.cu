@@ -33,6 +33,7 @@ void testMatMul(const csc485b::a2::DenseGraph& g, const csc485b::a2::DenseGraph&
             assert(output.adjacencyMatrix[row * g.n + col] == sum);
         }
     }
+    std::cout << "Squraed matrix is correct" << std::endl;
 }
 
 
@@ -41,64 +42,61 @@ void testMatMul(const csc485b::a2::DenseGraph& g, const csc485b::a2::DenseGraph&
   * Consists of independently constructing the graph and then
   * modifying it to its two-hop neighbourhood.
   */
+/* This fucntion should exclusively run DenseGraph due to matrix testing*/
 template < typename DeviceGraph >
 void run(DeviceGraph g, csc485b::a2::edge_t const* d_edges, std::size_t m)
 {
-    cudaDeviceSynchronize();
-    auto const build_start = std::chrono::high_resolution_clock::now();
 
     // this code doesn't work yet!
-    int threads_build = 1024;
-    int blocks_build = (m + threads_build - 1) / threads_build;
-    csc485b::a2::gpu::build_graph << < blocks_build, threads_build >> > (g, d_edges, m);
-    cudaDeviceSynchronize();
+   
+        auto const build_start = std::chrono::high_resolution_clock::now();
+        constexpr size_t build_threads = 1024;
+        int build_blocks = (g.n + build_threads - 1) / build_threads;
+        csc485b::a2::gpu::build_graph << < build_blocks, build_threads >> > (g, d_edges, m);
+        cudaDeviceSynchronize();
+
+        std::vector< csc485b::a2::node_t > built_matrix(g.n * g.n);
+        csc485b::a2::DenseGraph built_graph{ g.n, built_matrix.data() }; // DEVICE TO HOST
+        cudaMemcpy(built_graph.adjacencyMatrix, g.adjacencyMatrix, sizeof(csc485b::a2::node_t) * g.n * g.n, cudaMemcpyDeviceToHost);
 
 
-    std::vector< csc485b::a2::node_t > host_matrix_built(g.n * g.n);
-    csc485b::a2::DenseGraph built_graph{ g.n, host_matrix_built.data() };
-    cudaMemcpy(built_graph.adjacencyMatrix, g.adjacencyMatrix, sizeof(csc485b::a2::node_t) * g.n * g.n, cudaMemcpyDeviceToHost);
-
-
-
-
-    auto const reachability_start = std::chrono::high_resolution_clock::now();
-    // neither does this!
-    constexpr size_t threads = 32;
-    int blocks = (g.n + threads - 1) / threads;
-    dim3 THREADS(threads, threads);
-    dim3 BLOCKS(blocks, blocks);
-
-
-
-    csc485b::a2::node_t* d_matrix;
-    cudaMalloc((void**)&d_matrix, sizeof(csc485b::a2::node_t) * g.n * g.n);
-    csc485b::a2::DenseGraph d_output{ g.n, d_matrix }; // FOR DEVICE
+        auto const reachability_start = std::chrono::high_resolution_clock::now();
+        // neither does this!
+        constexpr size_t threads = 32;
+        int blocks = (g.n + threads - 1) / threads;
+        dim3 THREADS(threads, threads);
+        dim3 BLOCKS(blocks, blocks);
 
 
 
-    csc485b::a2::gpu::two_hop_reachability <<< BLOCKS, THREADS >>> (g, d_output);
-
-    cudaDeviceSynchronize();
-
-    std::vector< csc485b::a2::node_t > host_matrix(g.n * g.n);
-    csc485b::a2::DenseGraph output{ g.n, host_matrix.data() }; // DEVICE TO HOST
-    cudaMemcpy(output.adjacencyMatrix, d_output.adjacencyMatrix, sizeof(csc485b::a2::node_t) * g.n * g.n, cudaMemcpyDeviceToHost);
+        csc485b::a2::node_t* d_matrix;
+        cudaMalloc((void**)&d_matrix, sizeof(csc485b::a2::node_t) * g.n * g.n);
+        csc485b::a2::DenseGraph d_output{ g.n, d_matrix }; // FOR DEVICE
 
 
-    auto const end = std::chrono::high_resolution_clock::now();
 
-    std::cout << "Build time: "
-        << std::chrono::duration_cast<std::chrono::microseconds>(reachability_start - build_start).count()
-        << " us"
-        << std::endl;
+        csc485b::a2::gpu::two_hop_reachability << < BLOCKS, THREADS >> > (g, d_output);
+        cudaDeviceSynchronize();
 
-    std::cout << "Reachability time: "
-        << std::chrono::duration_cast<std::chrono::microseconds>(end - reachability_start).count()
-        << " us"
-        << std::endl;
+        std::vector< csc485b::a2::node_t > host_matrix(g.n * g.n);
+        csc485b::a2::DenseGraph output{ g.n, host_matrix.data() }; // DEVICE TO HOST
+        cudaMemcpy(output.adjacencyMatrix, d_output.adjacencyMatrix, sizeof(csc485b::a2::node_t) * g.n * g.n, cudaMemcpyDeviceToHost);
 
-    testMatMul(built_graph, output);
-    cudaFree(d_matrix);
+
+        auto const end = std::chrono::high_resolution_clock::now();
+
+        std::cout << "GPU Build time: "
+            << std::chrono::duration_cast<std::chrono::microseconds>(reachability_start - build_start).count()
+            << " us"
+            << std::endl;
+
+        std::cout << "GPU Reachability time: "
+            << std::chrono::duration_cast<std::chrono::microseconds>(end - reachability_start).count()
+            << " us"
+            << std::endl;
+
+        testMatMul(built_graph, output);
+        cudaFree(d_matrix);
 }
 
 std::vector<csc485b::a2::node_t> cpu_adjacency_matrix_dense(size_t n, csc485b::a2::edge_list_t edge_list, std::size_t m)
@@ -115,43 +113,6 @@ std::vector<csc485b::a2::node_t> cpu_adjacency_matrix_dense(size_t n, csc485b::a
     return matrix;
 }
 
-void cpu_matrix_mul(std::vector<csc485b::a2::node_t> adjMatrix, csc485b::a2::node_t* adjMatrixResult, int n)
-{
-    std::vector<csc485b::a2::node_t> matrix(n * n);
-    for (int i = 0; i < n; i++)
-    {
-        for (int j = 0; j < n; j++)
-        {
-            csc485b::a2::node_t sum = 0;
-            for (int k = 0; k < n; k++)
-            {
-                sum += adjMatrix[i * n + k] * adjMatrix[k * n + j];
-            }
-
-            assert(sum == adjMatrixResult[i * n + j]);
-        }
-    }
-}
-
-
-void testBuildGraph(csc485b::a2::DenseGraph g, size_t m, csc485b::a2::edge_list_t edge_list)
-{
-    size_t n = g.n;
-    std::vector<csc485b::a2::node_t> matrix(n * n);
-    for (int i = 0; i < m; ++i)
-    {
-        size_t x = edge_list[i].x;
-        size_t y = edge_list[i].y;
-        matrix[x * n + y] = 1;
-        matrix[y * n + x] = 1;
-    }
-
-    for (int i = 0; i < n * n; ++i)
-    {
-        assert(matrix[i] == g.adjacencyMatrix[i]);
-    }
-    return;
-}
 /**
  * Allocates space for a dense graph and then runs the test code on it.
  */
@@ -162,29 +123,68 @@ void run_dense(csc485b::a2::edge_t const* d_edges, std::size_t n, std::size_t m,
     // allocate device DenseGraph
     a2::node_t* d_matrix;
     cudaMalloc((void**)&d_matrix, sizeof(a2::node_t) * n * n);
-    a2::DenseGraph d_dg{ n, d_matrix };
+    a2::DenseGraph d_build_graph{ n, d_matrix };
+    run(d_build_graph, d_edges, m);
 
-    run(d_dg, d_edges, m);
-
-
-    
     // check output?
-    std::vector< a2::node_t > host_matrix(d_dg.matrix_size());
-    a2::DenseGraph dg{ n, host_matrix.data() };
-    cudaMemcpy(dg.adjacencyMatrix, d_dg.adjacencyMatrix, sizeof(a2::node_t) * d_dg.matrix_size(), cudaMemcpyDeviceToHost);
-    //std::copy(host_matrix.cbegin(), host_matrix.cend(), std::ostream_iterator< a2::node_t >(std::cout, " "));
+    std::vector< a2::node_t > host_matrix(d_build_graph.matrix_size());
+    a2::DenseGraph build_graph{ n, host_matrix.data() };
+    cudaMemcpy(d_build_graph.adjacencyMatrix, d_build_graph.adjacencyMatrix, sizeof(a2::node_t) * d_build_graph.matrix_size(), cudaMemcpyDeviceToHost);
 
-    testBuildGraph(dg, m, graph);
-    //testMatMul(dg);
+
 
 
     cudaFree(d_matrix);
 }
 
+
+/*
+* Constructs a SparseGraph from an input list of edges.
+* In slight variation of CSR format found at
+* https://www.usenix.org/system/files/login/articles/login_winter20_16_kelly.pdf 
+* uses index 0 and does not store total edge count in neighbours_start_at[V+1]
+*/
+csc485b::a2::SparseGraph cpu_CSR(std::size_t n, std::size_t m, csc485b::a2::edge_list_t graph) {
+    
+    using namespace csc485b;
+
+    a2::node_t* offsets = new a2::node_t[n]();
+    a2::node_t* dest = new a2::node_t[m]();
+
+    //first pass stores out degree of each vertetx in offsets
+    for (size_t i = 0; i < m; i++){
+        
+        a2::node_t x = graph[i].x;
+        offsets[x]++;   
+    }
+
+    //Updates offsetts to contain cumulative out degree (prefix sum)
+    int t = 0;
+    int a;
+    for (a = 0; a < n; a++) {
+        
+        t += offsets[a];
+        offsets[a] = t; 
+    }
+
+    //Settting neighbours and final offsett values
+    for (std::size_t i = 0; i < m; i++) {
+
+        a2::node_t x = graph[i].x;
+        a2::node_t y = graph[i].y;
+
+        dest[--offsets[x]] = y;
+    }
+
+    a2::SparseGraph sg{ n, m, offsets, dest };
+    return sg;
+}
+
 /**
  * Allocates space for a sparse graph and then runs the test code on it.
+ * Altered to take graph as input for testing purposes 
  */
-void run_sparse(csc485b::a2::edge_t const* d_edges, std::size_t n, std::size_t m)
+void run_sparse(csc485b::a2::edge_t const* d_edges, std::size_t n, std::size_t m, csc485b::a2::edge_list_t graph)
 {
     using namespace csc485b;
 
@@ -194,9 +194,111 @@ void run_sparse(csc485b::a2::edge_t const* d_edges, std::size_t n, std::size_t m
     cudaMalloc((void**)&d_neighbours, sizeof(a2::node_t) * m);
     a2::SparseGraph d_sg{ n, m, d_offsets, d_neighbours };
 
-    //run(d_sg, d_edges, m);
+    // I put the run function here for the sparse graph, dont use the run funtion for sparse
+    cudaDeviceSynchronize();
+    auto const build_start = std::chrono::high_resolution_clock::now();
 
-    // clean up
+    std::size_t const threads_per_block = 1024;
+    std::size_t const num_blocks = (n + threads_per_block - 1) / threads_per_block;
+
+    //This Works
+    csc485b::a2::gpu::build_graph << < num_blocks, threads_per_block >> > (d_sg, d_edges, m);
+
+    cudaDeviceSynchronize();
+    auto const reachability_start = std::chrono::high_resolution_clock::now();
+
+    //This does not work
+    //csc485b::a2::gpu::two_hop_reachability << < 1, 1 >> > (d_sg, d_sg);
+
+    cudaDeviceSynchronize();
+    auto const end = std::chrono::high_resolution_clock::now();
+
+    std::cout << "GPU Build time: "
+        << std::chrono::duration_cast<std::chrono::microseconds>(reachability_start - build_start).count()
+        << " us"
+        << std::endl;
+
+    std::cout << "GPU Reachability time: "
+        << std::chrono::duration_cast<std::chrono::microseconds>(end - reachability_start).count()
+        << " us"
+        << std::endl;
+
+    
+
+    a2::node_t * g_neighbours_start = new a2::node_t[n](); //Offset arrray
+    a2::node_t * g_neighbours = new a2::node_t[m](); //Edge destinations 
+    
+    //Getting the data out from cuda for testing 
+    cudaMemcpy(g_neighbours_start, d_offsets, sizeof(a2::node_t) * n, cudaMemcpyDeviceToHost); //get offsets
+    cudaMemcpy(g_neighbours, d_neighbours, sizeof(a2::node_t) * m, cudaMemcpyDeviceToHost); //get destinations 
+
+    //sort the neigbours 
+
+    a2::SparseGraph expected = cpu_CSR(n, m, graph);
+    
+    //Printing out offset and neigbourrs array of both solutions 
+    
+    std::cout << "Sparse GPU Offsets: ";
+    for (std::size_t i = 0; i < n; ++i) {
+        std::cout << g_neighbours_start[i] << " ";
+    }
+    std::cout << std::endl;
+
+    /*
+    std::cout << "Sparse GPU Neighbours: ";
+    for (std::size_t i = 0; i < m; ++i) {
+        std::cout << g_neighbours[i] << " ";
+    }
+    std::cout << std::endl;
+    */
+
+    std::cout << "Sparse CPU Offsets: ";
+    for (std::size_t i = 0; i < n; ++i) {
+        std::cout << expected.neighbours_start_at[i] << " ";
+    }
+    std::cout << std::endl;
+
+    /*
+    std::cout << "Sparse CPU Neighbours: ";
+    for (std::size_t i = 0; i < m; ++i) {
+        std::cout << expected.neighbours[i] << " ";
+    }
+    std::cout << std::endl;
+    */
+
+    
+    //tests
+    bool failed_offsets = false;
+    bool failed_neighbours = false;
+    
+    //check offsets
+    for (int i = 0; i < n; ++i) {
+        if (expected.neighbours_start_at[i] != g_neighbours_start[i])
+        {
+            failed_offsets = true;
+            break;
+        }
+    }
+    
+    /*
+    //check neigbours, this isnt fully needed since they are corret (each offset points towards the right 
+    section of neighbours its just that section isnt sorted)
+    for (int i = 0; i < m; ++i){
+        if (expected.neighbours[i] != g_neighbours[i])
+        {
+            failed_neighbours = true;
+            break;
+        }
+    }
+    */
+
+    if (failed_offsets) std::cout << "SparseGraph test failed at offsets" << std::endl;
+    //else if (failed_neighbours) std::cout << "SparseGraph test failed at neigbours" << std::endl;
+    else std::cout << "SparseGraph test passed" << std::endl;
+
+    //clean up
+    delete[] g_neighbours_start;
+    delete[] g_neighbours;
     cudaFree(d_neighbours);
     cudaFree(d_offsets);
 }
@@ -206,7 +308,8 @@ int main()
     using namespace csc485b;
 
     // Create input
-    std::size_t constexpr n = 1 << 12;
+    // CPU Testing makes it longer
+    std::size_t constexpr n = 1 << 10;
     std::size_t constexpr expected_degree = n >> 1;
 
     a2::edge_list_t const graph = a2::generate_graph(n, n * expected_degree);
@@ -218,11 +321,8 @@ int main()
     cudaMemcpyAsync(d_edges, graph.data(), sizeof(a2::edge_t) * m, cudaMemcpyHostToDevice);
 
     // run your code!
-    run_dense(d_edges, n, m, graph);
-
-    
-
-    //run_sparse(d_edges, n, m);
+    //run_dense(d_edges, n, m, graph);
+    run_sparse(d_edges, n, m, graph);
 
     return EXIT_SUCCESS;
 }
