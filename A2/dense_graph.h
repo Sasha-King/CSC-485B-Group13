@@ -90,7 +90,7 @@ void two_hop_reachability( DenseGraph g, DenseGraph output)
     {
         int sum = 0;
 
-        for (int tileOffset = 0; tileOffset < n / tileSize; ++tileOffset) {
+        for (int tileOffset = 0; tileOffset < (tileSize + n - 1) / tileSize; ++tileOffset) {
             a[threadIdx.y * tileSize + threadIdx.x] = g.adjacencyMatrix[row * n + (tileOffset * tileSize + threadIdx.x)];
             b[threadIdx.y * tileSize + threadIdx.x] = g.adjacencyMatrix[(tileOffset * tileSize + threadIdx.y) * n + col];
 
@@ -102,14 +102,6 @@ void two_hop_reachability( DenseGraph g, DenseGraph output)
                 sum += a[threadIdx.y * tileSize + i] * b[i * tileSize + threadIdx.x];
             }
             __syncthreads();
-
-            /*
-            int mult = a[threadIdx.x * tileSize + threadIdx.y] * b[threadIdx.y * tileSize + threadIdx.x];
-            for (int i = tileSize >> 1; i > 0; i >>= 1)
-            {
-                sum += __shfl_down_sync(-1, mult, i);
-            }
-            */
         }
             output.adjacencyMatrix[row * n + col] = sum;
     }

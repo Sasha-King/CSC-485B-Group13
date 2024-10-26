@@ -206,7 +206,7 @@ int main()
     using namespace csc485b;
 
     // Create input
-    std::size_t constexpr n = 1 << 12;
+    std::size_t constexpr n = 1 << 2;
     std::size_t constexpr expected_degree = n >> 1;
 
     a2::edge_list_t const graph = a2::generate_graph(n, n * expected_degree);
