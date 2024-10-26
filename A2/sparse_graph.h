@@ -37,12 +37,15 @@ void build_graph( SparseGraph g, edge_t const * edge_list, std::size_t m )
     return;
 }
 
+
 /**
   * Repopulates the adjacency lists as a new graph that represents
   * the two-hop neighbourhood of input graph g
   */
+
+
 __global__
-void two_hop_reachability( SparseGraph g )
+void two_hop_reachability( SparseGraph g, SparseGraph output )
 {
     // IMPLEMENT ME!
     // algorithm unknown
