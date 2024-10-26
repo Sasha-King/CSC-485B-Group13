@@ -26,12 +26,13 @@ namespace gpu {
 
 /*
 * Constructs a SparseGraph from an input list of edges using the GPU.
-* In slight variation of CSR format https://www.usenix.org/system/files/login/articles/login_winter20_16_kelly.pdf (uses index 0 and does not store E in neighbours_start_at[V+1])
+* In slight variation of CSR format (uses index 0 and does not store E in neighbours_start_at[V+1])
+* All code for CSR building is based off https://www.usenix.org/system/files/login/articles/login_winter20_16_kelly.pdf
+* Accessed October 20th 2024
 * @pre The pointers in SparseGraph g have already been allocated.
 */
 
-
-//Sets out degree of each ndoe
+//Sets out degree of each node
 __global__
 void out_degree(SparseGraph g, edge_t const* edge_list, std::size_t m) {
 
@@ -46,18 +47,16 @@ void out_degree(SparseGraph g, edge_t const* edge_list, std::size_t m) {
 //This isnt the best but it does work over multiple blocks 
 __global__ void scan(SparseGraph g, int n)
 {
-    
     unsigned int th_id = blockIdx.x * blockDim.x + threadIdx.x;
     if (th_id == 0) {
         
         int temp = 0;
         int a;
-        for (a = 0; a < g.n; a++) {
+        for (a = 0; a < n; a++) {
             temp += g.neighbours_start_at[a];
             g.neighbours_start_at[a] = temp;
         }
     }
-
 }
 
 //Sets neighbours and final offset array values
@@ -75,6 +74,8 @@ void build_neighbours(SparseGraph g, edge_t const* edge_list, std::size_t m) {
         g.neighbours[pos - 1] = y;
     }
 }
+
+//END CSR Build functions
 
 __global__
 void two_hop_reachability( SparseGraph g, SparseGraph output )

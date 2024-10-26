@@ -15,10 +15,6 @@
 #include "data_generator.h"
 #include "data_types.h"
 
-#include <thrust/scan.h>
-#include <thrust/execution_policy.h>
-
-
 void testMatMul(const csc485b::a2::DenseGraph& g, const csc485b::a2::DenseGraph& output)
 {
     for (int row = 0; row < g.n; row++)
@@ -203,13 +199,16 @@ void run_sparse(csc485b::a2::edge_t const* d_edges, std::size_t n, std::size_t m
 
     int threads_per_block = 1024;
     int num_blocks = (n + threads_per_block - 1) / threads_per_block;
-    //This Works
+    
+    //Get out degree of each vertex
     csc485b::a2::gpu::out_degree << < num_blocks, threads_per_block >> > (d_sg, d_edges, m);
     cudaDeviceSynchronize();
 
+    //Prefix sum for offset array
     csc485b::a2::gpu::scan << < 1, threads_per_block >> > (d_sg, n);
     cudaDeviceSynchronize();
 
+    //Set neighbours and final offset value 
     csc485b::a2::gpu::build_neighbours << < num_blocks, threads_per_block >> > (d_sg, d_edges, m);
     cudaDeviceSynchronize();
 
@@ -221,16 +220,15 @@ void run_sparse(csc485b::a2::edge_t const* d_edges, std::size_t n, std::size_t m
     cudaDeviceSynchronize();
     auto const end = std::chrono::high_resolution_clock::now();
 
-    std::cout << "GPU Build time: "
+    std::cout << "Sparse GPU Build time: "
         << std::chrono::duration_cast<std::chrono::microseconds>(reachability_start - build_start).count()
         << " us"
         << std::endl;
 
-    std::cout << "GPU Reachability time: "
+    std::cout << "Sparse GPU Reachability time: "
         << std::chrono::duration_cast<std::chrono::microseconds>(end - reachability_start).count()
         << " us"
         << std::endl;
-
 
     a2::node_t* g_neighbours_start = new a2::node_t[n](); //Offset arrray
     a2::node_t* g_neighbours = new a2::node_t[m](); //Edge destinations 
@@ -241,13 +239,15 @@ void run_sparse(csc485b::a2::edge_t const* d_edges, std::size_t n, std::size_t m
 
     a2::SparseGraph expected = cpu_CSR(n, m, graph);
 
-    //Printing out offset and neigbourrs array of both solutions 
+    //Print out offset and neigbourrs array of both solutions 
 
+    /*
     std::cout << "Sparse GPU Offsets: ";
     for (std::size_t i = 0; i < n; ++i) {
         std::cout << g_neighbours_start[i] << " ";
     }
     std::cout << std::endl;
+    */
 
     /*
     std::cout << "Sparse GPU Neighbours: ";
@@ -257,11 +257,13 @@ void run_sparse(csc485b::a2::edge_t const* d_edges, std::size_t n, std::size_t m
     std::cout << std::endl;
     */
 
+    /*
     std::cout << "Sparse CPU Offsets: ";
     for (std::size_t i = 0; i < n; ++i) {
         std::cout << expected.neighbours_start_at[i] << " ";
     }
     std::cout << std::endl;
+    */
 
     /*
     std::cout << "Sparse CPU Neighbours: ";
@@ -271,10 +273,9 @@ void run_sparse(csc485b::a2::edge_t const* d_edges, std::size_t n, std::size_t m
     std::cout << std::endl;
     */
 
-
-    //tests
+    // Tests for correctness 
     bool failed_offsets = false;
-    bool failed_neighbours = false;
+    //bool failed_neighbours = false;
 
     //check offsets
     for (int i = 0; i < n; ++i) {
@@ -300,6 +301,7 @@ void run_sparse(csc485b::a2::edge_t const* d_edges, std::size_t n, std::size_t m
     if (failed_offsets) std::cout << "SparseGraph test failed at offsets" << std::endl;
     //else if (failed_neighbours) std::cout << "SparseGraph test failed at neigbours" << std::endl;
     else std::cout << "SparseGraph test passed" << std::endl;
+    
     //clean up
     delete[] g_neighbours_start;
     delete[] g_neighbours;
@@ -319,6 +321,9 @@ int main()
     a2::edge_list_t const graph = a2::generate_graph(n, n * expected_degree);
     std::size_t const m = graph.size();
 
+    std::cout << "Graph has" << " ";
+    std::cout << n << " ";
+    std::cout << "nodes" << std::endl;
 
     a2::edge_t* d_edges;
     cudaMalloc((void**)&d_edges, sizeof(a2::edge_t) * m);
