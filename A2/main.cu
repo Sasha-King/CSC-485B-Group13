@@ -207,10 +207,8 @@ void run_sparse(csc485b::a2::edge_t const* d_edges, std::size_t n, std::size_t m
     csc485b::a2::gpu::out_degree << < num_blocks, threads_per_block >> > (d_sg, d_edges, m);
     cudaDeviceSynchronize();
 
-    //csc485b::a2::gpu::pre_sum << < num_blocks, threads_per_block >> > (d_sg, m);
-    
-    //Using thrust library for prefix sum instead of own implmentationn
-    thrust::inclusive_scan(thrust::device, d_sg.neighbours_start_at, d_sg.neighbours_start_at + n, d_sg.neighbours_start_at);
+    csc485b::a2::gpu::scan << < 1, threads_per_block >> > (d_sg, n);
+    cudaDeviceSynchronize();
 
     csc485b::a2::gpu::build_neighbours << < num_blocks, threads_per_block >> > (d_sg, d_edges, m);
     cudaDeviceSynchronize();

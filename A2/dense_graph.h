@@ -64,6 +64,7 @@ void two_hop_reachability( DenseGraph g, DenseGraph output)
     size_t n = g.n;
     int tileSize = blockDim.x;
 
+    //Matrix multitply
     if (row < n && col < n)
     {
         int sum = 0;
@@ -89,8 +90,14 @@ void two_hop_reachability( DenseGraph g, DenseGraph output)
             }
             */
         }
-            output.adjacencyMatrix[row * n + col] = sum;
+        output.adjacencyMatrix[row * n + col] = sum;
     }
+
+
+    //Set diagonals 
+
+     //Clamp values
+
 
     return;
 }

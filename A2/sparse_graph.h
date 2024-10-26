@@ -43,6 +43,23 @@ void out_degree(SparseGraph g, edge_t const* edge_list, std::size_t m) {
     }
 }
 
+//This isnt the best but it does work over multiple blocks 
+__global__ void scan(SparseGraph g, int n)
+{
+    
+    unsigned int th_id = blockIdx.x * blockDim.x + threadIdx.x;
+    if (th_id == 0) {
+        
+        int temp = 0;
+        int a;
+        for (a = 0; a < g.n; a++) {
+            temp += g.neighbours_start_at[a];
+            g.neighbours_start_at[a] = temp;
+        }
+    }
+
+}
+
 //Sets neighbours and final offset array values
 __global__
 void build_neighbours(SparseGraph g, edge_t const* edge_list, std::size_t m) {
