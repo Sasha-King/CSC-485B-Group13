@@ -15,6 +15,9 @@
 #include "data_generator.h"
 #include "data_types.h"
 
+#include <thrust/scan.h>
+#include <thrust/execution_policy.h>
+
 
 void testMatMul(const csc485b::a2::DenseGraph& g, const csc485b::a2::DenseGraph& output)
 {
@@ -194,17 +197,23 @@ void run_sparse(csc485b::a2::edge_t const* d_edges, std::size_t n, std::size_t m
     cudaMalloc((void**)&d_neighbours, sizeof(a2::node_t) * m);
     a2::SparseGraph d_sg{ n, m, d_offsets, d_neighbours };
 
-    // I put the run function here for the sparse graph, dont use the run funtion for sparse
+    //Run Sparse
     cudaDeviceSynchronize();
     auto const build_start = std::chrono::high_resolution_clock::now();
 
-    std::size_t const threads_per_block = 1024;
-    std::size_t const num_blocks = (n + threads_per_block - 1) / threads_per_block;
-
+    int threads_per_block = 1024;
+    int num_blocks = (n + threads_per_block - 1) / threads_per_block;
     //This Works
-    csc485b::a2::gpu::build_graph << < num_blocks, threads_per_block >> > (d_sg, d_edges, m);
-
+    csc485b::a2::gpu::out_degree << < num_blocks, threads_per_block >> > (d_sg, d_edges, m);
     cudaDeviceSynchronize();
+
+    //csc485b::a2::gpu::pre_sum << < num_blocks, threads_per_block >> > (d_sg, m);
+    
+    thrust::inclusive_scan(thrust::device, d_sg.neighbours_start_at, d_sg.neighbours_start_at + n, d_sg.neighbours_start_at);
+
+    csc485b::a2::gpu::build_neighbours << < num_blocks, threads_per_block >> > (d_sg, d_edges, m);
+    cudaDeviceSynchronize();
+
     auto const reachability_start = std::chrono::high_resolution_clock::now();
 
     //This does not work
@@ -223,21 +232,18 @@ void run_sparse(csc485b::a2::edge_t const* d_edges, std::size_t n, std::size_t m
         << " us"
         << std::endl;
 
-    
 
-    a2::node_t * g_neighbours_start = new a2::node_t[n](); //Offset arrray
-    a2::node_t * g_neighbours = new a2::node_t[m](); //Edge destinations 
-    
+    a2::node_t* g_neighbours_start = new a2::node_t[n](); //Offset arrray
+    a2::node_t* g_neighbours = new a2::node_t[m](); //Edge destinations 
+
     //Getting the data out from cuda for testing 
     cudaMemcpy(g_neighbours_start, d_offsets, sizeof(a2::node_t) * n, cudaMemcpyDeviceToHost); //get offsets
     cudaMemcpy(g_neighbours, d_neighbours, sizeof(a2::node_t) * m, cudaMemcpyDeviceToHost); //get destinations 
 
-    //sort the neigbours 
-
     a2::SparseGraph expected = cpu_CSR(n, m, graph);
-    
+
     //Printing out offset and neigbourrs array of both solutions 
-    
+
     std::cout << "Sparse GPU Offsets: ";
     for (std::size_t i = 0; i < n; ++i) {
         std::cout << g_neighbours_start[i] << " ";
@@ -266,11 +272,11 @@ void run_sparse(csc485b::a2::edge_t const* d_edges, std::size_t n, std::size_t m
     std::cout << std::endl;
     */
 
-    
+
     //tests
     bool failed_offsets = false;
     bool failed_neighbours = false;
-    
+
     //check offsets
     for (int i = 0; i < n; ++i) {
         if (expected.neighbours_start_at[i] != g_neighbours_start[i])
@@ -279,9 +285,9 @@ void run_sparse(csc485b::a2::edge_t const* d_edges, std::size_t n, std::size_t m
             break;
         }
     }
-    
+
     /*
-    //check neigbours, this isnt fully needed since they are corret (each offset points towards the right 
+    //check neigbours, this isnt fully needed since they are corret (each offset points towards the right
     section of neighbours its just that section isnt sorted)
     for (int i = 0; i < m; ++i){
         if (expected.neighbours[i] != g_neighbours[i])
@@ -295,7 +301,6 @@ void run_sparse(csc485b::a2::edge_t const* d_edges, std::size_t n, std::size_t m
     if (failed_offsets) std::cout << "SparseGraph test failed at offsets" << std::endl;
     //else if (failed_neighbours) std::cout << "SparseGraph test failed at neigbours" << std::endl;
     else std::cout << "SparseGraph test passed" << std::endl;
-
     //clean up
     delete[] g_neighbours_start;
     delete[] g_neighbours;
@@ -309,7 +314,7 @@ int main()
 
     // Create input
     // CPU Testing makes it longer
-    std::size_t constexpr n = 1 << 10;
+    std::size_t constexpr n = 4096;
     std::size_t constexpr expected_degree = n >> 1;
 
     a2::edge_list_t const graph = a2::generate_graph(n, n * expected_degree);

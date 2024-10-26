@@ -27,46 +27,37 @@ namespace gpu {
 /*
 * Constructs a SparseGraph from an input list of edges using the GPU.
 * In slight variation of CSR format https://www.usenix.org/system/files/login/articles/login_winter20_16_kelly.pdf (uses index 0 and does not store E in neighbours_start_at[V+1])
-* Also the way the edges are formated there is a (1,0) and a (0,1) edge
 * @pre The pointers in SparseGraph g have already been allocated.
 */
-__global__ 
-void build_graph( SparseGraph g, edge_t const * edge_list, std::size_t m )
-{
+
+
+//Sets out degree of each ndoe
+__global__
+void out_degree(SparseGraph g, edge_t const* edge_list, std::size_t m) {
+
     unsigned int th_id = blockIdx.x * blockDim.x + threadIdx.x;
-    
-    // Step One, store out-degree of each vertex in N (neighbours_start_at) 
-    // First pass over input
-    for (size_t i = th_id; i < g.m; i += gridDim.x * blockDim.x){
+
+    for (unsigned int i = th_id; i < m; i += gridDim.x * blockDim.x) {
         node_t x = edge_list[i].x;
         atomicAdd(&g.neighbours_start_at[x], 1); //stores out degree of each node
     }
-    __syncthreads();
-    
-    //WIP This shouldnt take this long but im tired 
-    //This will cause it to fail over multiple blocks (m > 256 it breaks) 
-    if (th_id == 0) {
-        int temp = 0;
-        int a;
-        for (a = 0; a < g.n; a++) {
-            temp += g.neighbours_start_at[a];
-            g.neighbours_start_at[a] = temp;
-        }
-    }
-    __syncthreads();
-
-    //Settting neighbours and final offsett values
-    for (unsigned int i = th_id; i < g.m; i += gridDim.x * blockDim.x) {
-        
-        node_t x = edge_list[i].x;
-        node_t y = edge_list[i].y;
-        
-       unsigned int pos = atomicSub(&g.neighbours_start_at[x], 1); //atomic add returns orginal x before incremenation
-       g.neighbours[pos-1] = y;
-       
-    } 
 }
 
+//Sets neighbours and final offset array values
+__global__
+void build_neighbours(SparseGraph g, edge_t const* edge_list, std::size_t m) {
+
+    unsigned int th_id = blockIdx.x * blockDim.x + threadIdx.x;
+
+    for (unsigned int i = th_id; i < m; i += gridDim.x * blockDim.x) {
+
+        node_t x = edge_list[i].x;
+        node_t y = edge_list[i].y;
+
+        unsigned int pos = atomicSub(&g.neighbours_start_at[x], 1); //atomic add returns orginal x before incremenation
+        g.neighbours[pos - 1] = y;
+    }
+}
 
 __global__
 void two_hop_reachability( SparseGraph g, SparseGraph output )
