@@ -311,7 +311,7 @@ int main()
 
     // Create input
     // CPU Testing makes it longer
-    std::size_t constexpr n = 4096;
+    std::size_t constexpr n = 1024;
     std::size_t constexpr expected_degree = n >> 1;
 
     a2::edge_list_t const graph = a2::generate_graph(n, n * expected_degree);

@@ -62,8 +62,7 @@ __device__ void squareMatrix(const node_t* input, node_t* output, size_t N)
     int tileSize = blockDim.x; // Should be 32 
 
     //Matrix multitply
-    if (row < N && col < N)
-    {
+    if (row < N && col < N){
         int sum = 0;
         
         //This stuff should be able to be sped up 
@@ -78,15 +77,18 @@ __device__ void squareMatrix(const node_t* input, node_t* output, size_t N)
                 
                 //unsigned mask = __ballot_sync(FULL_MASK, threadIdx.x < N); //This just seems to slow it down since output is still correct 
 
-                //Take value in lane a or b, active mask lets all active threads  
+                //Syncs threads and "collects" the lane, FULL_MASK works better here then active (id assume its because all threads are generaly active) 
+                // Might be able to be made faster just not sure how 
                 int a_lane = __shfl_sync(FULL_MASK, a, i, tileSize); 
                 int b_lane = __shfl_sync(FULL_MASK, b, i, tileSize); 
                        
                 sum += a_lane * b_lane;
                 
             }    
-            
-           /* a[threadIdx.y * tileSize + threadIdx.x] = input[row * N + (tileOffset * tileSize + threadIdx.x)];
+      
+            //Shared memory code
+            /* 
+            a[threadIdx.y * tileSize + threadIdx.x] = input[row * N + (tileOffset * tileSize + threadIdx.x)];
             b[threadIdx.y * tileSize + threadIdx.x] = input[(tileOffset * tileSize + threadIdx.y) * N + col];
 
             __syncthreads();
@@ -95,9 +97,8 @@ __device__ void squareMatrix(const node_t* input, node_t* output, size_t N)
             {
                 sum += a[threadIdx.y * tileSize + i] * b[i * tileSize + threadIdx.x];
             }
-            __syncthreads();*/
-            
-
+            __syncthreads();
+            */          
         }
         output[row * N + col] = fminf(fmaxf(sum, 0), 1); // clamp between 0, 1
     }
