@@ -7,6 +7,8 @@
 #include "cuda_common.h"
 #include "data_types.h"
 
+#define FULL_MASK 0xffffffff //mask
+
 namespace csc485b {
 namespace a2      {
 
@@ -48,23 +50,43 @@ void build_graph(DenseGraph g, edge_t const* edge_list, std::size_t m)
     return;
 }
 
+//Warp primitives https://developer.nvidia.com/blog/using-cuda-warp-level-primitives/
 __device__ void squareMatrix(const node_t* input, node_t* output, size_t N)
 {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
 
-    __shared__ node_t a[1024];
-    __shared__ node_t b[1024];
+    //__shared__ node_t a[1024];
+    //__shared__ node_t b[1024];
 
-    int tileSize = blockDim.x;
+    int tileSize = blockDim.x; // Should be 32 
 
     //Matrix multitply
     if (row < N && col < N)
     {
         int sum = 0;
-
+        
+        //This stuff should be able to be sped up 
         for (int tileOffset = 0; tileOffset < (tileSize + N - 1) / tileSize; ++tileOffset) {
-            a[threadIdx.y * tileSize + threadIdx.x] = input[row * N + (tileOffset * tileSize + threadIdx.x)];
+                 
+            int a = input[row * N + (tileOffset * tileSize + threadIdx.x)]; //row
+
+            int b = input[(tileOffset * tileSize + threadIdx.y) * N + col]; //col 
+
+            // Accumulate results within the warp using shuffle
+            for (int i = 0; i < tileSize; i++) {
+                
+                //unsigned mask = __ballot_sync(FULL_MASK, threadIdx.x < N); //This just seems to slow it down since output is still correct 
+
+                //Take value in lane a or b, active mask lets all active threads  
+                int a_lane = __shfl_sync(FULL_MASK, a, i, tileSize); 
+                int b_lane = __shfl_sync(FULL_MASK, b, i, tileSize); 
+                       
+                sum += a_lane * b_lane;
+                
+            }    
+            
+           /* a[threadIdx.y * tileSize + threadIdx.x] = input[row * N + (tileOffset * tileSize + threadIdx.x)];
             b[threadIdx.y * tileSize + threadIdx.x] = input[(tileOffset * tileSize + threadIdx.y) * N + col];
 
             __syncthreads();
@@ -73,12 +95,15 @@ __device__ void squareMatrix(const node_t* input, node_t* output, size_t N)
             {
                 sum += a[threadIdx.y * tileSize + i] * b[i * tileSize + threadIdx.x];
             }
-            __syncthreads();
+            __syncthreads();*/
+            
+
         }
         output[row * N + col] = fminf(fmaxf(sum, 0), 1); // clamp between 0, 1
     }
 }
 
+//This is so simple I dont think warps would help much 
 __device__ void removeSelfLoops(node_t* matrix, const size_t& N)
 {
     int row = blockIdx.y * blockDim.y + threadIdx.y;

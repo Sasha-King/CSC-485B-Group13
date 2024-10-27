@@ -22,7 +22,7 @@ void testMatMul(const csc485b::a2::DenseGraph& g, const csc485b::a2::DenseGraph&
         for (int col = 0; col < g.n; col++)
         {
             csc485b::a2::node_t sum = 0;
-
+       
             if (row == col)
             {
                 // Set diagonal elements to 0
@@ -34,7 +34,6 @@ void testMatMul(const csc485b::a2::DenseGraph& g, const csc485b::a2::DenseGraph&
                 {
                     sum += g.adjacencyMatrix[row * g.n + k] * g.adjacencyMatrix[k * g.n + col];
                 }
-
                 //Ensure the result is clamped to 0 or 1
                 assert(output.adjacencyMatrix[row * g.n + col] == fminf(fmaxf(sum, 0), 1));
             }
@@ -53,57 +52,49 @@ void testMatMul(const csc485b::a2::DenseGraph& g, const csc485b::a2::DenseGraph&
 template < typename DeviceGraph >
 void run(DeviceGraph g, csc485b::a2::edge_t const* d_edges, std::size_t m)
 {
+    
+    auto const build_start = std::chrono::high_resolution_clock::now();
+    constexpr size_t build_threads = 1024;
+    int build_blocks = (g.n + build_threads - 1) / build_threads;
+    csc485b::a2::gpu::build_graph << < build_blocks, build_threads >> > (g, d_edges, m);
+    cudaDeviceSynchronize();
 
-    // this code doesn't work yet!
-   
-        auto const build_start = std::chrono::high_resolution_clock::now();
-        constexpr size_t build_threads = 1024;
-        int build_blocks = (g.n + build_threads - 1) / build_threads;
-        csc485b::a2::gpu::build_graph << < build_blocks, build_threads >> > (g, d_edges, m);
-        cudaDeviceSynchronize();
+    std::vector< csc485b::a2::node_t > built_matrix(g.n * g.n);
+    csc485b::a2::DenseGraph built_graph{ g.n, built_matrix.data() }; // DEVICE TO HOST
+    cudaMemcpy(built_graph.adjacencyMatrix, g.adjacencyMatrix, sizeof(csc485b::a2::node_t) * g.n * g.n, cudaMemcpyDeviceToHost);
 
-        std::vector< csc485b::a2::node_t > built_matrix(g.n * g.n);
-        csc485b::a2::DenseGraph built_graph{ g.n, built_matrix.data() }; // DEVICE TO HOST
-        cudaMemcpy(built_graph.adjacencyMatrix, g.adjacencyMatrix, sizeof(csc485b::a2::node_t) * g.n * g.n, cudaMemcpyDeviceToHost);
+    auto const reachability_start = std::chrono::high_resolution_clock::now();
+    
+    constexpr size_t threads = 32;
+    int blocks = (g.n + threads - 1) / threads;
+    dim3 THREADS(threads, threads);
+    dim3 BLOCKS(blocks, blocks);
 
+    csc485b::a2::node_t* d_matrix;
+    cudaMalloc((void**)&d_matrix, sizeof(csc485b::a2::node_t) * g.n * g.n);
+    csc485b::a2::DenseGraph d_output{ g.n, d_matrix }; // FOR DEVICE
 
-        auto const reachability_start = std::chrono::high_resolution_clock::now();
-        // neither does this!
-        constexpr size_t threads = 32;
-        int blocks = (g.n + threads - 1) / threads;
-        dim3 THREADS(threads, threads);
-        dim3 BLOCKS(blocks, blocks);
+    csc485b::a2::gpu::two_hop_reachability << < BLOCKS, THREADS >> > (g, d_output);
+    cudaDeviceSynchronize();
 
+    std::vector< csc485b::a2::node_t > host_matrix(g.n * g.n);
+    csc485b::a2::DenseGraph output{ g.n, host_matrix.data() }; // DEVICE TO HOST
+    cudaMemcpy(output.adjacencyMatrix, d_output.adjacencyMatrix, sizeof(csc485b::a2::node_t) * g.n * g.n, cudaMemcpyDeviceToHost);
 
+    auto const end = std::chrono::high_resolution_clock::now();
 
-        csc485b::a2::node_t* d_matrix;
-        cudaMalloc((void**)&d_matrix, sizeof(csc485b::a2::node_t) * g.n * g.n);
-        csc485b::a2::DenseGraph d_output{ g.n, d_matrix }; // FOR DEVICE
+    std::cout << "GPU Build time: "
+        << std::chrono::duration_cast<std::chrono::microseconds>(reachability_start - build_start).count()
+        << " us"
+        << std::endl;
 
+    std::cout << "GPU Reachability time: "
+        << std::chrono::duration_cast<std::chrono::microseconds>(end - reachability_start).count()
+        << " us"
+        << std::endl;
 
-
-        csc485b::a2::gpu::two_hop_reachability << < BLOCKS, THREADS >> > (g, d_output);
-        cudaDeviceSynchronize();
-
-        std::vector< csc485b::a2::node_t > host_matrix(g.n * g.n);
-        csc485b::a2::DenseGraph output{ g.n, host_matrix.data() }; // DEVICE TO HOST
-        cudaMemcpy(output.adjacencyMatrix, d_output.adjacencyMatrix, sizeof(csc485b::a2::node_t) * g.n * g.n, cudaMemcpyDeviceToHost);
-
-
-        auto const end = std::chrono::high_resolution_clock::now();
-
-        std::cout << "GPU Build time: "
-            << std::chrono::duration_cast<std::chrono::microseconds>(reachability_start - build_start).count()
-            << " us"
-            << std::endl;
-
-        std::cout << "GPU Reachability time: "
-            << std::chrono::duration_cast<std::chrono::microseconds>(end - reachability_start).count()
-            << " us"
-            << std::endl;
-
-        testMatMul(built_graph, output);
-        cudaFree(d_matrix);
+    testMatMul(built_graph, output);
+    cudaFree(d_matrix);
 }
 
 std::vector<csc485b::a2::node_t> cpu_adjacency_matrix_dense(size_t n, csc485b::a2::edge_list_t edge_list, std::size_t m)
@@ -137,9 +128,6 @@ void run_dense(csc485b::a2::edge_t const* d_edges, std::size_t n, std::size_t m,
     std::vector< a2::node_t > host_matrix(d_build_graph.matrix_size());
     a2::DenseGraph build_graph{ n, host_matrix.data() };
     cudaMemcpy(d_build_graph.adjacencyMatrix, d_build_graph.adjacencyMatrix, sizeof(a2::node_t) * d_build_graph.matrix_size(), cudaMemcpyDeviceToHost);
-
-
-
 
     cudaFree(d_matrix);
 }
@@ -323,16 +311,14 @@ int main()
 
     // Create input
     // CPU Testing makes it longer
-    std::size_t constexpr n = 1 << 12;
+    std::size_t constexpr n = 4096;
     std::size_t constexpr expected_degree = n >> 1;
 
     a2::edge_list_t const graph = a2::generate_graph(n, n * expected_degree);
     std::size_t const m = graph.size();
 
-    std::cout << "Graph has" << " ";
-    std::cout << n << " ";
-    std::cout << "nodes" << std::endl;
-
+    std::cout << "Graph has" << " " << n << " " << "nodes" << std::endl;
+    
     a2::edge_t* d_edges;
     cudaMalloc((void**)&d_edges, sizeof(a2::edge_t) * m);
     cudaMemcpyAsync(d_edges, graph.data(), sizeof(a2::edge_t) * m, cudaMemcpyHostToDevice);
