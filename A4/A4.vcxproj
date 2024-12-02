@@ -10,6 +10,14 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="cuda_common.h" />
+    <ClInclude Include="data_types.h" />
+    <ClInclude Include="GEMM.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="main.cu" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{D11004AF-2EAF-4A83-BC24-25FDFAE0A6F4}</ProjectGuid>
     <RootNamespace>A4</RootNamespace>
@@ -76,9 +84,6 @@
       <TargetMachinePlatform>64</TargetMachinePlatform>
     </CudaCompile>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <CudaCompile Include="kernel.cu" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 12.6.targets" />
