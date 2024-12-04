@@ -12,7 +12,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="cuda_common.h" />
-    <ClInclude Include="data_types.h" />
     <ClInclude Include="GEMM.h" />
   </ItemGroup>
   <ItemGroup>
