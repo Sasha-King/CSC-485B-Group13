@@ -2,13 +2,9 @@
 #include <chrono>   // for timing
 #include <iostream> // std::cout, std::endl
 #include <iterator> // std::ostream_iterator
-#include <vector>
-#include <cassert>
-#include <algorithm> //for std::sort
 #include <cstddef>  // std::size_t type
 #include <random>   // for std::mt19937, std::uniform_int_distribution
 #include <vector>
-
 
 #include "cuda_common.h"
 #include "GEMM.h"
